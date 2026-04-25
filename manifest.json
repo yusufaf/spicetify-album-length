@@ -1,0 +1,14 @@
+{
+  "name": "Album Length",
+  "description": "Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.",
+  "preview": "image.png",
+  "main": "album-length.js",
+  "readme": "README.md",
+  "authors": [
+    {
+      "name": "yusufaf",
+      "url": "https://github.com/yusufaf"
+    }
+  ],
+  "tags": ["album", "length", "duration", "playlists", "tracklist"]
+}
