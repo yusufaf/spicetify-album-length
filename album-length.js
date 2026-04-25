@@ -38,8 +38,13 @@ const BADGE_DATA_ATTR = 'data-al-album';
 const TOOLTIP_ID = 'al-tooltip';
 const STYLE_ID = 'al-styles';
 
-/** Tracklist selectors */
-const SEL_TRACKLIST_ROW = '[data-testid="tracklist-row"]';
+/**
+ * Tracklist row selector. Spotify's track rows are `.main-trackList-trackListRow`
+ * (the inner grid container). The header row uses `.main-trackList-trackListHeaderRow`,
+ * so this class is unique to actual track rows. Older builds used
+ * `[data-testid="tracklist-row"]` but that attribute was removed.
+ */
+const SEL_TRACKLIST_ROW = '.main-trackList-trackListRow';
 /** Anchor inside a row that links to the album the track belongs to. */
 const SEL_ALBUM_LINK = 'a[href^="/album/"]';
 
@@ -145,6 +150,7 @@ function clearCache() {
 /**
  * Returns the total duration of the given album in ms.
  * Returns null if the album should be suppressed (single & hideSingles).
+ * Tries the legacy Cosmos endpoint first, then falls back to GraphQL.
  * @param {string} albumId
  * @returns {Promise<number|null>}
  */
@@ -158,22 +164,14 @@ async function getAlbumDurationMs(albumId) {
 
   const promise = (async () => {
     try {
-      const res = await Spicetify.CosmosAsync.get(
-        `wg://album/v1/album-app/album/${albumId}/desktop`
-      );
-      const tracks = collectTracks(res);
-      const totalMs = tracks.reduce((sum, t) => sum + (t?.duration?.milliseconds || t?.duration || 0), 0);
+      const result = await fetchAlbumSummary(albumId);
+      if (!result) return null;
 
-      const albumType = (res?.type || res?.album_type || '').toLowerCase();
-      const isSingleOneTrack = albumType === 'single' && tracks.length === 1;
-
+      const { totalMs, isSingleOneTrack } = result;
       const value = isSingleOneTrack ? SUPPRESS : totalMs;
       albumDurationCache.set(albumId, value);
       persistCache();
       return value;
-    } catch (e) {
-      console.warn('[Album Length] Cosmos fetch failed for', albumId, e);
-      return null;
     } finally {
       inFlight.delete(albumId);
     }
@@ -184,16 +182,93 @@ async function getAlbumDurationMs(albumId) {
 }
 
 /**
- * The desktop album endpoint returns tracks under res.discs[].tracks; older
- * variants flatten to res.tracks. Handle both.
+ * @param {string} albumId
+ * @returns {Promise<{totalMs: number, isSingleOneTrack: boolean}|null>}
+ */
+async function fetchAlbumSummary(albumId) {
+  // 1) Legacy Cosmos endpoint — fastest, but deprecated on newer builds.
+  try {
+    const res = await Spicetify.CosmosAsync.get(
+      `wg://album/v1/album-app/album/${albumId}/desktop`
+    );
+    const tracks = collectTracksLegacy(res);
+    if (tracks.length > 0) {
+      const totalMs = tracks.reduce((sum, t) => sum + (t?.duration?.milliseconds || t?.duration || 0), 0);
+      const albumType = (res?.type || res?.album_type || '').toLowerCase();
+      return { totalMs, isSingleOneTrack: albumType === 'single' && tracks.length === 1 };
+    }
+  } catch (e) {
+    // Fall through to GraphQL.
+    console.debug('[Album Length] wg:// fetch failed', albumId, e?.message || e);
+  }
+
+  // 2) GraphQL fallback (matches enhanced-pins.js getAlbum usage).
+  try {
+    if (Spicetify?.GraphQL?.Request && Spicetify?.GraphQL?.Definitions?.getAlbum) {
+      const res = await Spicetify.GraphQL.Request(
+        Spicetify.GraphQL.Definitions.getAlbum,
+        {
+          uri: `spotify:album:${albumId}`,
+          locale: Spicetify.Locale?.getLocale?.() || 'en',
+          limit: 500,
+          offset: 0
+        }
+      );
+      const album = res?.data?.albumUnion;
+      if (album) {
+        const trackItems = collectTracksGraphQL(album);
+        const totalMs = trackItems.reduce((sum, ms) => sum + ms, 0);
+        const albumType = (album.type || '').toLowerCase();
+        if (totalMs > 0) {
+          return { totalMs, isSingleOneTrack: albumType === 'single' && trackItems.length === 1 };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Album Length] GraphQL fetch failed for', albumId, e?.message || e);
+    return null;
+  }
+
+  console.warn('[Album Length] No usable album data for', albumId);
+  return null;
+}
+
+/**
+ * Legacy desktop endpoint may return tracks under res.discs[].tracks or res.tracks.
  * @param {*} res
  * @returns {Array<{duration: any}>}
  */
-function collectTracks(res) {
+function collectTracksLegacy(res) {
   if (!res) return [];
   if (Array.isArray(res.tracks)) return res.tracks;
   if (Array.isArray(res.discs)) {
     return res.discs.flatMap((d) => Array.isArray(d.tracks) ? d.tracks : []);
+  }
+  return [];
+}
+
+/**
+ * GraphQL albumUnion can use a few shapes depending on schema version. Pull
+ * track-duration milliseconds out of each.
+ * @param {*} album
+ * @returns {number[]} per-track duration ms
+ */
+function collectTracksGraphQL(album) {
+  const containers = [album.tracksV2, album.tracks];
+  for (const container of containers) {
+    if (!container?.items) continue;
+    const out = [];
+    for (const item of container.items) {
+      const track = item.track || item;
+      const ms =
+        track?.duration?.totalMilliseconds ??
+        track?.duration?.milliseconds ??
+        (typeof track?.duration === 'number' ? track.duration : null) ??
+        track?.trackDuration?.totalMilliseconds ??
+        null;
+      if (typeof ms === 'number') out.push(ms);
+    }
+    if (out.length > 0) return out;
   }
   return [];
 }
@@ -279,12 +354,25 @@ function surfaceEnabled() {
 
 /**
  * Extracts the album id from a tracklist row.
+ *
+ * Rows typically contain TWO /album/ anchors: one wrapping the artwork in the
+ * title cell (no text content), and one in the Album column (the album name as
+ * text). We want the textual one — appending to the artwork link puts the
+ * badge behind the image where it can't be seen.
+ *
  * @param {HTMLElement} row
  * @returns {{albumId: string, albumLink: HTMLAnchorElement}|null}
  */
 function extractAlbumFromRow(row) {
-  const anchor = row.querySelector(SEL_ALBUM_LINK);
+  const anchors = row.querySelectorAll(SEL_ALBUM_LINK);
+  if (anchors.length === 0) return null;
+
+  let anchor = null;
+  for (const a of anchors) {
+    if (a.textContent.trim().length > 0) { anchor = a; break; }
+  }
   if (!anchor) return null;
+
   const href = anchor.getAttribute('href') || '';
   const match = href.match(/^\/album\/([A-Za-z0-9]+)/);
   if (!match) return null;

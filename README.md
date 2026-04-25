@@ -2,7 +2,7 @@
 
 A [Spicetify](https://spicetify.app/) extension that surfaces the length of each track's source album / EP inline in playlists, Liked Songs, and the Queue — so you can see at a glance how long the whole project is without clicking into the album.
 
-![screenshot](image.png)
+![Inline album length badges in a playlist](album-inline.png)
 
 ## Why
 
@@ -31,9 +31,19 @@ Manual install:
    spicetify apply
    ```
 
+## Display modes
+
+Inline (default) shows the length appended to the album name. Tooltip mode hides it until you hover the album cell.
+
+| Tooltip on hover |
+| --- |
+| ![Tooltip showing album length on hover](album-tooltip.png) |
+
 ## Settings
 
 Open the Spotify profile dropdown (top-right) → **Album Length**.
+
+![Album Length settings modal](album-length-settings.png)
 
 | Setting | Description |
 | --- | --- |
@@ -45,7 +55,7 @@ Open the Spotify profile dropdown (top-right) → **Album Length**.
 
 ## How it works
 
-Each tracklist row contains a link to the album it came from (`/album/<id>`). When the row is rendered, the extension extracts that id, fetches the album's track list via Spicetify's internal Cosmos endpoint (`wg://album/v1/album-app/album/<id>/desktop`), sums the track durations, and writes the total into `LocalStorage`. Cached entries are reused indefinitely. A single `MutationObserver` on the main view container handles re-injection when Spotify re-renders rows.
+Each tracklist row contains a link to the album it came from (`/album/<id>`). When the row is rendered, the extension extracts that id and fetches the album's track list — first via Spicetify's internal Cosmos endpoint (`wg://album/v1/album-app/album/<id>/desktop`), falling back to GraphQL (`getAlbum`) on newer Spotify builds where the legacy endpoint is gone. Track durations are summed and the total is persisted to `Spicetify.LocalStorage` indefinitely. A single `MutationObserver` on the main view container handles re-injection when Spotify re-renders rows.
 
 ## License
 
