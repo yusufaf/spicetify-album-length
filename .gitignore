@@ -32,6 +32,3 @@ build/
 *.tmp
 .cache/
 tmpclaude-*-cwd
-
-# Session transcripts dropped by tooling
-2026-*.txt
