@@ -1,10 +1,15 @@
 // NAME: Album Length
 // AUTHOR: yusufaf
-// VERSION: 1.0.0
+// VERSION: 1.0.1
 // DESCRIPTION: Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.
 
 (function () {
 'use strict';
+
+// Prevent the extension from running more than once per page session (e.g. if
+// Spicetify injects the script multiple times without a full page reload).
+if (window.__albumLengthActive) return;
+window.__albumLengthActive = true;
 
 //#region Type Definitions
 
@@ -367,16 +372,20 @@ function extractAlbumFromRow(row) {
   const anchors = row.querySelectorAll(SEL_ALBUM_LINK);
   if (anchors.length === 0) return null;
 
-  let anchor = null;
   for (const a of anchors) {
-    if (a.textContent.trim().length > 0) { anchor = a; break; }
+    if (!a.textContent.trim()) continue;
+    // Only claim this anchor for `row` if `row` is its nearest tracklist-row
+    // ancestor. If a nested element also carries SEL_TRACKLIST_ROW, that inner
+    // element owns the anchor — not the outer one. This prevents the same
+    // anchor being processed by multiple levels of a nested row hierarchy,
+    // which would produce one badge per nesting level.
+    if (a.closest(SEL_TRACKLIST_ROW) !== row) continue;
+    const href = a.getAttribute('href') || '';
+    const match = href.match(/^\/album\/([A-Za-z0-9]+)/);
+    if (!match) continue;
+    return { albumId: match[1], albumLink: a };
   }
-  if (!anchor) return null;
-
-  const href = anchor.getAttribute('href') || '';
-  const match = href.match(/^\/album\/([A-Za-z0-9]+)/);
-  if (!match) return null;
-  return { albumId: match[1], albumLink: anchor };
+  return null;
 }
 
 /**
@@ -432,13 +441,25 @@ async function injectIntoRow(row) {
   if (albumLink.dataset.alAlbum === albumId && albumLink.dataset.alMode === currentConfig.displayMode) {
     return;
   }
+  // Skip if an injection for this album is already in-flight for this link,
+  // preventing duplicate badges when fast-scrolling triggers concurrent calls.
+  if (albumLink.dataset.alPending === albumId) return;
+
   // Stale: clean up before re-injecting in the new mode.
   removeBadge(albumLink);
   detachTooltipHandlers(albumLink);
   delete albumLink.dataset.alAlbum;
   delete albumLink.dataset.alMode;
 
+  albumLink.dataset.alPending = albumId;
   const ms = await getAlbumDurationMs(albumId);
+
+  // After the async gap bail if: the link was detached (Spotify removed the
+  // row during virtualization), or the pending marker was cleared externally.
+  if (!document.contains(albumLink)) return;
+  if (albumLink.dataset.alPending !== albumId) return;
+  delete albumLink.dataset.alPending;
+
   if (ms === SUPPRESS && currentConfig.hideSingles) return;
   if (typeof ms !== 'number') return;
 
@@ -464,6 +485,12 @@ async function injectIntoRow(row) {
 function appendInlineBadge(albumLink, text) {
   const cell = albumLink.parentElement;
   if (!cell) return;
+  // Last-resort guard: check the entire tracklist row (not just the immediate
+  // cell) so that duplicates are caught even when concurrent injections used
+  // different album-link elements with different parent cells (e.g. when
+  // Spotify's nested row structure caused multiple querySelectorAll matches).
+  const rowScope = albumLink.closest(SEL_TRACKLIST_ROW) || cell;
+  if (rowScope.querySelector(`.${BADGE_CLASS}`)) return;
   const badge = document.createElement('span');
   badge.className = BADGE_CLASS;
   badge.textContent = ` · ${text}`;
@@ -493,10 +520,11 @@ function detachTooltipHandlers(albumLink) {
  */
 function clearAllBadges() {
   document.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
-  document.querySelectorAll(`a[data-al-album]`).forEach((el) => {
+  document.querySelectorAll(`a[data-al-album], a[data-al-pending]`).forEach((el) => {
     detachTooltipHandlers(el);
     delete el.dataset.alAlbum;
     delete el.dataset.alMode;
+    delete el.dataset.alPending;
   });
 }
 
@@ -509,7 +537,18 @@ function injectAll() {
     return;
   }
   const rows = document.querySelectorAll(SEL_TRACKLIST_ROW);
-  rows.forEach((row) => { injectIntoRow(row); });
+  // Spotify renders sibling ".main-trackList-trackListRow" elements at the
+  // same DOM level for the same visual track (e.g. a content row plus an
+  // interaction-overlay row). They occupy identical pixel positions. Only
+  // process the first row seen at each vertical position so the overlay copy
+  // doesn't also receive a badge.
+  const seenTops = new Set();
+  rows.forEach((row) => {
+    const top = row.getBoundingClientRect().top;
+    if (seenTops.has(top)) return;
+    seenTops.add(top);
+    injectIntoRow(row);
+  });
 }
 
 function scheduleInject() {
