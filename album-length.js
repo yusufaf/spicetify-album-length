@@ -1,6 +1,6 @@
 // NAME: Album Length
 // AUTHOR: yusufaf
-// VERSION: 1.0.1
+// VERSION: 1.0.2
 // DESCRIPTION: Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.
 
 (function () {
@@ -485,12 +485,18 @@ async function injectIntoRow(row) {
 function appendInlineBadge(albumLink, text) {
   const cell = albumLink.parentElement;
   if (!cell) return;
-  // Last-resort guard: check the entire tracklist row (not just the immediate
-  // cell) so that duplicates are caught even when concurrent injections used
-  // different album-link elements with different parent cells (e.g. when
-  // Spotify's nested row structure caused multiple querySelectorAll matches).
   const rowScope = albumLink.closest(SEL_TRACKLIST_ROW) || cell;
+  // Guard 1: same-row check.
   if (rowScope.querySelector(`.${BADGE_CLASS}`)) return;
+  // Guard 2: visual-position check across all badges in the document.
+  const cellRect = cell.getBoundingClientRect();
+  const existingBadges = document.querySelectorAll(`.${BADGE_CLASS}`);
+  for (const existing of existingBadges) {
+    const r = existing.getBoundingClientRect();
+    if (Math.abs(r.top - cellRect.top) < 8 && Math.abs(r.left - cellRect.left) < 240) {
+      return;
+    }
+  }
   const badge = document.createElement('span');
   badge.className = BADGE_CLASS;
   badge.textContent = ` · ${text}`;
@@ -536,24 +542,53 @@ function injectAll() {
     clearAllBadges();
     return;
   }
-  const rows = document.querySelectorAll(SEL_TRACKLIST_ROW);
-  // Spotify renders sibling ".main-trackList-trackListRow" elements at the
-  // same DOM level for the same visual track (e.g. a content row plus an
-  // interaction-overlay row). They occupy identical pixel positions. Only
-  // process the first row seen at each vertical position so the overlay copy
-  // doesn't also receive a badge.
-  const seenTops = new Set();
-  rows.forEach((row) => {
+  // Spotify renders sibling ".main-trackList-trackListRow" elements per visual
+  // track (e.g. a content row plus an interaction-overlay row) at the same —
+  // or near-identical, sub-pixel-off — vertical position. Sort by `.top` and
+  // skip any row that lands within a small pixel threshold of the previous
+  // one, so the overlay copy doesn't also receive a badge. A strict equality
+  // check (previous approach) missed pairs that differed by fractions of a
+  // pixel from CSS transforms/virtualization.
+  const rows = Array.from(document.querySelectorAll(SEL_TRACKLIST_ROW));
+  rows.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+  let lastTop = -Infinity;
+  for (const row of rows) {
     const top = row.getBoundingClientRect().top;
-    if (seenTops.has(top)) return;
-    seenTops.add(top);
+    if (top - lastTop < 4) continue;
+    lastTop = top;
     injectIntoRow(row);
-  });
+  }
 }
 
 function scheduleInject() {
   clearTimeout(injectDebounceTimer);
-  injectDebounceTimer = setTimeout(injectAll, 120);
+  injectDebounceTimer = setTimeout(() => {
+    injectAll();
+    // After injections settle, sweep for any visually-duplicate badges that
+    // slipped past the per-append guards (a final safety net).
+    setTimeout(sweepDuplicateBadges, 250);
+  }, 120);
+}
+
+/**
+ * Removes any badge whose visual position overlaps an earlier badge. Belt-and-
+ * suspenders for the duplicate-badge bug: even if two injections race past
+ * every prior guard, this cleans the result.
+ */
+function sweepDuplicateBadges() {
+  const badges = document.querySelectorAll(`.${BADGE_CLASS}`);
+  /** @type {Array<{top: number, left: number}>} */
+  const seen = [];
+  badges.forEach((badge) => {
+    const r = badge.getBoundingClientRect();
+    for (const s of seen) {
+      if (Math.abs(s.top - r.top) < 8 && Math.abs(s.left - r.left) < 240) {
+        badge.remove();
+        return;
+      }
+    }
+    seen.push({ top: r.top, left: r.left });
+  });
 }
 
 //#endregion
