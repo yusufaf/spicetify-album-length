@@ -1,3 +1,9 @@
+---
+name: Bug report
+about: Create a report to help us improve
+labels: bug
+---
+
 <!-- Bug report template -->
 **Title:** 
 
@@ -20,3 +26,4 @@ Steps to reproduce:
 **Logs / stack trace**
 
 **Additional context**
+
