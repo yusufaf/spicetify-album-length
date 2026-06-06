@@ -15,10 +15,12 @@ window.__albumLengthActive = true;
 
 /**
  * @typedef {Object} AlbumLengthConfig
- * @property {'inline'|'column'|'tooltip'} displayMode
+ * @property {'inline'|'tooltip'} displayMode
+ * @property {'album'|'duration'} placement
  * @property {'short'|'colon'|'long'|'auto'} format
  * @property {{playlist: boolean, likedSongs: boolean, queue: boolean}} surfaces
  * @property {boolean} hideSingles
+ * @property {boolean} colorCoding
  */
 
 /**
@@ -57,9 +59,11 @@ const SEL_ALBUM_LINK = 'a[href^="/album/"]';
 /** @type {AlbumLengthConfig} */
 const DEFAULT_CONFIG = {
   displayMode: 'inline',
+  placement: 'album',
   format: 'short',
   surfaces: { playlist: true, likedSongs: true, queue: true },
-  hideSingles: true
+  hideSingles: true,
+  colorCoding: false
 };
 
 /** Sentinel for cache entries that should not render (singles when hideSingles is on). */
@@ -372,6 +376,9 @@ function extractAlbumFromRow(row) {
   const anchors = row.querySelectorAll(SEL_ALBUM_LINK);
   if (anchors.length === 0) return null;
 
+  // The duration cell is usually the last cell, we can find it by class or testid
+  const durationCell = row.querySelector('.main-trackList-duration') || row.querySelector('.main-trackList-rowDuration') || row.querySelector('[data-testid="tracklist-duration"]');
+
   for (const a of anchors) {
     if (!a.textContent.trim()) continue;
     // Only claim this anchor for `row` if `row` is its nearest tracklist-row
@@ -383,7 +390,7 @@ function extractAlbumFromRow(row) {
     const href = a.getAttribute('href') || '';
     const match = href.match(/^\/album\/([A-Za-z0-9]+)/);
     if (!match) continue;
-    return { albumId: match[1], albumLink: a };
+    return { albumId: match[1], albumLink: a, durationCell };
   }
   return null;
 }
@@ -419,46 +426,41 @@ function hideTooltip() {
 }
 
 /**
- * Removes any badge previously injected on this album link / row.
- * @param {HTMLAnchorElement} albumLink
- */
-function removeBadge(albumLink) {
-  const cell = albumLink.parentElement;
-  if (!cell) return;
-  cell.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
-}
-
-/**
  * Injects (or refreshes) the badge on a row according to the active display mode.
  * @param {HTMLElement} row
  */
 async function injectIntoRow(row) {
   const info = extractAlbumFromRow(row);
   if (!info) return;
-  const { albumId, albumLink } = info;
+  const { albumId, albumLink, durationCell } = info;
 
-  // Skip if this row already has a badge for this album in the current mode.
-  if (albumLink.dataset.alAlbum === albumId && albumLink.dataset.alMode === currentConfig.displayMode) {
+  const targetCell = currentConfig.placement === 'duration' && durationCell ? durationCell : albumLink;
+
+  // We attach data to the row instead of the link so it persists when switching placement modes
+  if (row.dataset.alAlbum === albumId && 
+      row.dataset.alMode === currentConfig.displayMode &&
+      row.dataset.alPlacement === currentConfig.placement &&
+      row.dataset.alColor === String(currentConfig.colorCoding)) {
     return;
   }
-  // Skip if an injection for this album is already in-flight for this link,
-  // preventing duplicate badges when fast-scrolling triggers concurrent calls.
-  if (albumLink.dataset.alPending === albumId) return;
+  if (row.dataset.alPending === albumId) return;
 
-  // Stale: clean up before re-injecting in the new mode.
-  removeBadge(albumLink);
+  // Clean up existing badges
+  row.querySelectorAll(`.${BADGE_CLASS}`).forEach(el => el.remove());
   detachTooltipHandlers(albumLink);
-  delete albumLink.dataset.alAlbum;
-  delete albumLink.dataset.alMode;
+  if (durationCell) detachTooltipHandlers(durationCell);
+  
+  delete row.dataset.alAlbum;
+  delete row.dataset.alMode;
+  delete row.dataset.alPlacement;
+  delete row.dataset.alColor;
 
-  albumLink.dataset.alPending = albumId;
+  row.dataset.alPending = albumId;
   const ms = await getAlbumDurationMs(albumId);
 
-  // After the async gap bail if: the link was detached (Spotify removed the
-  // row during virtualization), or the pending marker was cleared externally.
-  if (!document.contains(albumLink)) return;
-  if (albumLink.dataset.alPending !== albumId) return;
-  delete albumLink.dataset.alPending;
+  if (!document.contains(row)) return;
+  if (row.dataset.alPending !== albumId) return;
+  delete row.dataset.alPending;
 
   if (ms === SUPPRESS && currentConfig.hideSingles) return;
   if (typeof ms !== 'number') return;
@@ -467,29 +469,29 @@ async function injectIntoRow(row) {
 
   switch (currentConfig.displayMode) {
     case 'tooltip':
-      attachTooltipHandlers(albumLink, text);
+      attachTooltipHandlers(targetCell, text);
       break;
-    case 'column':
-      // Column mode is a v1.1 stub — fall back to inline for now so users still
-      // see the data. Settings UI marks the option as "Coming soon".
     case 'inline':
     default:
-      appendInlineBadge(albumLink, text);
+      appendInlineBadge(targetCell, text, ms, currentConfig.placement);
       break;
   }
 
-  albumLink.dataset.alAlbum = albumId;
-  albumLink.dataset.alMode = currentConfig.displayMode;
+  row.dataset.alAlbum = albumId;
+  row.dataset.alMode = currentConfig.displayMode;
+  row.dataset.alPlacement = currentConfig.placement;
+  row.dataset.alColor = String(currentConfig.colorCoding);
 }
 
-function appendInlineBadge(albumLink, text) {
-  const cell = albumLink.parentElement;
-  if (!cell) return;
-  const rowScope = albumLink.closest(SEL_TRACKLIST_ROW) || cell;
-  // Guard 1: same-row check.
-  if (rowScope.querySelector(`.${BADGE_CLASS}`)) return;
-  // Guard 2: visual-position check across all badges in the document.
-  const cellRect = cell.getBoundingClientRect();
+function appendInlineBadge(targetCell, text, ms, placement) {
+  const cell = targetCell.parentElement;
+  if (!cell && targetCell.tagName !== 'DIV') return;
+  
+  const rowScope = targetCell.closest(SEL_TRACKLIST_ROW) || cell;
+  if (rowScope && rowScope.querySelector(`.${BADGE_CLASS}`)) return;
+  
+  // Visual guard
+  const cellRect = (cell || targetCell).getBoundingClientRect();
   const existingBadges = document.querySelectorAll(`.${BADGE_CLASS}`);
   for (const existing of existingBadges) {
     const r = existing.getBoundingClientRect();
@@ -497,11 +499,31 @@ function appendInlineBadge(albumLink, text) {
       return;
     }
   }
+  
   const badge = document.createElement('span');
   badge.className = BADGE_CLASS;
-  badge.textContent = ` · ${text}`;
+  
+  if (placement === 'duration') {
+    badge.textContent = text;
+    badge.classList.add('al-placement-duration');
+  } else {
+    badge.textContent = `${text}`;
+    badge.classList.add('al-placement-album');
+  }
+
+  if (currentConfig.colorCoding) {
+    if (ms < 1800000) badge.classList.add('color-short'); // < 30 min
+    else if (ms < 3600000) badge.classList.add('color-medium'); // 30 - 60 min
+    else badge.classList.add('color-long'); // > 60 min
+  }
+
   badge.setAttribute('aria-label', `Album length: ${text}`);
-  cell.appendChild(badge);
+  
+  if (placement === 'duration') {
+    targetCell.appendChild(badge);
+  } else {
+    cell.appendChild(badge);
+  }
 }
 
 function attachTooltipHandlers(albumLink, text) {
@@ -526,11 +548,14 @@ function detachTooltipHandlers(albumLink) {
  */
 function clearAllBadges() {
   document.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
-  document.querySelectorAll(`a[data-al-album], a[data-al-pending]`).forEach((el) => {
-    detachTooltipHandlers(el);
-    delete el.dataset.alAlbum;
-    delete el.dataset.alMode;
-    delete el.dataset.alPending;
+  document.querySelectorAll(SEL_TRACKLIST_ROW).forEach((row) => {
+    delete row.dataset.alAlbum;
+    delete row.dataset.alMode;
+    delete row.dataset.alPlacement;
+    delete row.dataset.alColor;
+    delete row.dataset.alPending;
+    
+    row.querySelectorAll('a, div').forEach(el => detachTooltipHandlers(el));
   });
 }
 
@@ -622,10 +647,40 @@ function injectStyles() {
   style.textContent = `
     .${BADGE_CLASS} {
       color: var(--spice-subtext, #b3b3b3);
-      font-size: inherit;
-      margin-left: 2px;
       pointer-events: none;
       white-space: nowrap;
+    }
+    .${BADGE_CLASS}.al-placement-album {
+      display: block;
+      font-size: 0.9em;
+      margin-top: 2px;
+    }
+    .${BADGE_CLASS}.al-placement-duration {
+      font-size: 0.85em;
+      opacity: 0.8;
+      margin-left: 6px;
+    }
+    /*
+     * On hover/focus Spotify reveals the add-to-playlist (check) and more (...)
+     * buttons inside the duration column. The add button is pinned to the left
+     * of the duration, so our inline badge — which widens the duration cell
+     * leftward — gets overlapped by it. Hide the badge while the row is hovered
+     * or focused so those buttons reclaim their native space; the album length
+     * reappears once the row is no longer interacted with.
+     */
+    .main-trackList-trackListRow:hover .${BADGE_CLASS}.al-placement-duration,
+    .main-trackList-trackListRow:focus-within .${BADGE_CLASS}.al-placement-duration {
+      display: none;
+    }
+    .${BADGE_CLASS}.color-short {
+      color: var(--spice-button, #1ed760);
+    }
+    .${BADGE_CLASS}.color-medium {
+      color: var(--spice-subtext, #b3b3b3);
+    }
+    .${BADGE_CLASS}.color-long {
+      color: var(--spice-text, #ffffff);
+      font-weight: 600;
     }
     .al-tooltip {
       position: fixed;
@@ -677,9 +732,14 @@ function showSettingsModal() {
   container.innerHTML = `
     <div class="al-row">
       <h3>Display Mode</h3>
-      <label><input type="radio" name="al-mode" value="inline"  ${config.displayMode === 'inline'  ? 'checked' : ''}> Inline (append to album cell)</label>
-      <label><input type="radio" name="al-mode" value="tooltip" ${config.displayMode === 'tooltip' ? 'checked' : ''}> Tooltip (hover album cell)</label>
-      <label class="al-disabled"><input type="radio" name="al-mode" value="column" disabled> Column &mdash; coming soon</label>
+      <label><input type="radio" name="al-mode" value="inline"  ${config.displayMode === 'inline'  ? 'checked' : ''}> Subtext (persistent text)</label>
+      <label><input type="radio" name="al-mode" value="tooltip" ${config.displayMode === 'tooltip' ? 'checked' : ''}> Tooltip (on hover)</label>
+    </div>
+
+    <div class="al-row">
+      <h3>Placement</h3>
+      <label><input type="radio" name="al-placement" value="album" ${config.placement === 'album' ? 'checked' : ''}> Album column (below album name)</label>
+      <label><input type="radio" name="al-placement" value="duration" ${config.placement === 'duration' ? 'checked' : ''}> Duration column (below song length)</label>
     </div>
 
     <div class="al-row">
@@ -700,6 +760,7 @@ function showSettingsModal() {
     <div class="al-row">
       <h3>Behavior</h3>
       <label><input type="checkbox" name="al-hide-singles" ${config.hideSingles ? 'checked' : ''}> Hide for singles (1-track albums)</label>
+      <label><input type="checkbox" name="al-color-coding" ${config.colorCoding ? 'checked' : ''}> Color-code badges by length</label>
     </div>
 
     <div class="al-actions">
@@ -710,13 +771,15 @@ function showSettingsModal() {
   const applyChange = () => {
     const updated = {
       displayMode: container.querySelector('input[name="al-mode"]:checked')?.value || 'inline',
+      placement: container.querySelector('input[name="al-placement"]:checked')?.value || 'album',
       format: container.querySelector('input[name="al-format"]:checked')?.value || 'short',
       surfaces: {
         playlist: container.querySelector('input[name="al-surface-playlist"]').checked,
         likedSongs: container.querySelector('input[name="al-surface-likedSongs"]').checked,
         queue: container.querySelector('input[name="al-surface-queue"]').checked
       },
-      hideSingles: container.querySelector('input[name="al-hide-singles"]').checked
+      hideSingles: container.querySelector('input[name="al-hide-singles"]').checked,
+      colorCoding: container.querySelector('input[name="al-color-coding"]').checked
     };
     currentConfig = updated;
     saveConfig(updated);
