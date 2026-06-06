@@ -3,7 +3,8 @@
     ".": {
       "release-type": "simple",
       "extra-files": [
-        { "type": "json", "path": "package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "package.json", "jsonpath": "$.version" },
+        { "type": "generic", "path": "album-length.js" }
       ]
     }
   }

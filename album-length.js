@@ -1,6 +1,8 @@
 // NAME: Album Length
 // AUTHOR: yusufaf
+// x-release-please-start-version
 // VERSION: 1.0.2
+// x-release-please-end-version
 // DESCRIPTION: Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.
 
 (function () {
