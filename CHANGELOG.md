@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3](https://github.com/yusufaf/spicetify-album-length/compare/v1.0.2...v1.0.3) (2026-06-07)
+
+
+### Bug Fixes
+
+* prevent duplicate album-length badges during fast scroll ([eae7d58](https://github.com/yusufaf/spicetify-album-length/commit/eae7d5861651e8e1505e4f0e4ecb68bc6fc13ddb))
+* re-encode release-please workflow as UTF-8 ([6b3cbfb](https://github.com/yusufaf/spicetify-album-length/commit/6b3cbfbbe185af250c71d57d25d5aeb217e06b5c))
+* stop add-to-playlist check overlapping duration-column album length ([214a389](https://github.com/yusufaf/spicetify-album-length/commit/214a389705095ebba8a9d0960c0b70e76e31540f))
+* stop fast-scroll duplicate badges with layered defenses (1.0.2) ([3ab7546](https://github.com/yusufaf/spicetify-album-length/commit/3ab754646b552b2e1f20f4b2d0c150110fa7d769))
+
 ## [1.0.2] - 2026-05-16
 
 ### Fixed
