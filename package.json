@@ -4,7 +4,7 @@
   "description": "Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.",
   "main": "album-length.js",
   "scripts": {
-    "test": "echo \"no tests\"",
+    "test": "node --check album-length.js",
     "prepare": "husky"
   },
   "keywords": [],
