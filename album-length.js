@@ -449,6 +449,7 @@ async function injectIntoRow(row) {
 
   // Clean up existing badges
   row.querySelectorAll(`.${BADGE_CLASS}`).forEach(el => el.remove());
+  row.querySelectorAll('.al-has-badge').forEach(el => el.classList.remove('al-has-badge'));
   detachTooltipHandlers(albumLink);
   if (durationCell) detachTooltipHandlers(durationCell);
   
@@ -516,12 +517,17 @@ function appendInlineBadge(targetCell, text, ms, placement) {
   if (currentConfig.colorCoding) {
     if (ms < 1800000) badge.classList.add('color-short'); // < 30 min
     else if (ms < 3600000) badge.classList.add('color-medium'); // 30 - 60 min
-    else badge.classList.add('color-long'); // > 60 min
+    else if (ms < 7200000) badge.classList.add('color-long'); // 60 - 120 min
+    else badge.classList.add('color-xlong'); // > 120 min
   }
 
   badge.setAttribute('aria-label', `Album length: ${text}`);
-  
+
   if (placement === 'duration') {
+    // Stack the badge below the song length and right-align both (the duration
+    // column is right-aligned in Spotify). al-has-badge turns the time cell into
+    // a column flex so the time sits on top and the album length directly below.
+    targetCell.classList.add('al-has-badge');
     targetCell.appendChild(badge);
   } else {
     cell.appendChild(badge);
@@ -550,6 +556,7 @@ function detachTooltipHandlers(albumLink) {
  */
 function clearAllBadges() {
   document.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
+  document.querySelectorAll('.al-has-badge').forEach((el) => el.classList.remove('al-has-badge'));
   document.querySelectorAll(SEL_TRACKLIST_ROW).forEach((row) => {
     delete row.dataset.alAlbum;
     delete row.dataset.alMode;
@@ -658,9 +665,18 @@ function injectStyles() {
       margin-top: 2px;
     }
     .${BADGE_CLASS}.al-placement-duration {
+      display: block;
+      text-align: right;
       font-size: 0.85em;
       opacity: 0.8;
-      margin-left: 6px;
+      margin-top: 2px;
+    }
+    /* Make the duration cell stack the song length and album length vertically,
+       right-aligned to match Spotify's right-aligned duration column. */
+    .main-trackList-duration.al-has-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
     }
     /*
      * On hover/focus Spotify reveals the add-to-playlist (check) and more (...)
@@ -674,14 +690,19 @@ function injectStyles() {
     .main-trackList-trackListRow:focus-within .${BADGE_CLASS}.al-placement-duration {
       display: none;
     }
+    /* Graduated palette — distinct hues so each tier reads differently and none
+       collide with the default subtext gray. */
     .${BADGE_CLASS}.color-short {
-      color: var(--spice-button, #1ed760);
+      color: #1ed760; /* < 30 min — green */
     }
     .${BADGE_CLASS}.color-medium {
-      color: var(--spice-subtext, #b3b3b3);
+      color: #ffd24c; /* 30 - 60 min — yellow */
     }
     .${BADGE_CLASS}.color-long {
-      color: var(--spice-text, #ffffff);
+      color: #ff8a3d; /* 60 - 120 min — orange */
+    }
+    .${BADGE_CLASS}.color-xlong {
+      color: #ff5c5c; /* > 120 min — red */
       font-weight: 600;
     }
     .al-tooltip {
