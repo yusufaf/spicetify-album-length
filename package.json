@@ -1,6 +1,6 @@
 {
   "name": "spicetify-album-length",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Show the length of each track's source album/EP inline in playlists, Liked Songs, and the Queue.",
   "main": "album-length.js",
   "scripts": {

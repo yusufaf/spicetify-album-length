@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3](https://github.com/yusufaf/spicetify-album-length/compare/v1.0.2...v1.0.3) (2026-06-13)
+
+
+### Bug Fixes
+
+* distinct color-coding palette and stacked duration placement ([300e25f](https://github.com/yusufaf/spicetify-album-length/commit/300e25f07d89b0b66e7f6a914e0e5cd902ae634e))
+
 ## [1.0.2] - 2026-05-16
 
 ### Fixed
