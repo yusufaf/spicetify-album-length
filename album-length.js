@@ -721,7 +721,7 @@ function injectStyles() {
     .al-tooltip.visible { opacity: 1; }
 
     /* Settings modal */
-    .al-settings { display: flex; flex-direction: column; gap: 16px; min-width: 320px; }
+    .al-settings { display: flex; flex-direction: column; gap: 16px; min-width: 480px; }
     .al-settings h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--spice-subtext, #b3b3b3); }
     .al-settings label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; }
     .al-settings input[type="radio"], .al-settings input[type="checkbox"] { accent-color: var(--spice-button, #1ed760); }
@@ -821,7 +821,8 @@ function showSettingsModal() {
 
   Spicetify.PopupModal.display({
     title: 'Album Length',
-    content: container
+    content: container,
+    isLarge: true
   });
 }
 
