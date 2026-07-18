@@ -23,6 +23,8 @@ window.__albumLengthActive = true;
  * @property {{playlist: boolean, likedSongs: boolean, queue: boolean}} surfaces
  * @property {boolean} hideSingles
  * @property {boolean} colorCoding
+ * @property {{short: string, medium: string, long: string, xlong: string}} colors - Hex color per length tier.
+ * @property {{short: number, medium: number, long: number}} thresholds - Tier boundaries in minutes, ascending.
  */
 
 /**
@@ -65,8 +67,25 @@ const DEFAULT_CONFIG = {
   format: 'short',
   surfaces: { playlist: true, likedSongs: true, queue: true },
   hideSingles: true,
-  colorCoding: false
+  colorCoding: false,
+  colors: {
+    short: '#1ed760',
+    medium: '#ffd24c',
+    long: '#ff8a3d',
+    xlong: '#ff5c5c'
+  },
+  thresholds: {
+    short: 30,
+    medium: 60,
+    long: 120
+  }
 };
+
+/** Length tiers, ordered shortest to longest. Drives the palette and the settings UI. */
+const COLOR_TIERS = ['short', 'medium', 'long', 'xlong'];
+
+/** The three editable tier boundaries (xlong is open-ended, so it has no boundary of its own). */
+const THRESHOLD_TIERS = ['short', 'medium', 'long'];
 
 /** Sentinel for cache entries that should not render (singles when hideSingles is on). */
 const SUPPRESS = null;
@@ -97,6 +116,58 @@ let injectDebounceTimer = null;
 
 //#region Storage
 
+/**
+ * Coerces a user-entered color to a canonical `#rrggbb` string.
+ * Accepts `#rgb` shorthand (expanded) and any letter casing.
+ * @param {unknown} value
+ * @param {string} fallback - Returned when the value isn't a valid hex color.
+ * @returns {string}
+ */
+function normalizeHex(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const hex = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
+  if (/^#[0-9a-f]{3}$/.test(hex)) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return fallback;
+}
+
+/**
+ * Coerces the tier boundaries to whole ascending minutes. Each value falls back to
+ * the default when unparseable, then boundaries are pushed apart so that no tier
+ * can become unreachable (e.g. a `medium` below `short` would never match).
+ * @param {Partial<AlbumLengthConfig['thresholds']>} raw
+ * @returns {AlbumLengthConfig['thresholds']}
+ */
+function normalizeThresholds(raw) {
+  const clamp = (value, fallback) => {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(Math.max(n, 1), 100000);
+  };
+  const source = raw || {};
+  const short = clamp(source.short, DEFAULT_CONFIG.thresholds.short);
+  const medium = Math.max(clamp(source.medium, DEFAULT_CONFIG.thresholds.medium), short + 1);
+  const long = Math.max(clamp(source.long, DEFAULT_CONFIG.thresholds.long), medium + 1);
+  return { short, medium, long };
+}
+
+/**
+ * Normalizes the color palette, falling back to the defaults for any missing or
+ * malformed entry.
+ * @param {Partial<AlbumLengthConfig['colors']>} raw
+ * @returns {AlbumLengthConfig['colors']}
+ */
+function normalizeColors(raw) {
+  const source = raw || {};
+  const colors = {};
+  for (const tier of COLOR_TIERS) {
+    colors[tier] = normalizeHex(source[tier], DEFAULT_CONFIG.colors[tier]);
+  }
+  return colors;
+}
+
 /** @returns {AlbumLengthConfig} */
 function loadConfig() {
   try {
@@ -106,7 +177,9 @@ function loadConfig() {
     return {
       ...DEFAULT_CONFIG,
       ...parsed,
-      surfaces: { ...DEFAULT_CONFIG.surfaces, ...(parsed.surfaces || {}) }
+      surfaces: { ...DEFAULT_CONFIG.surfaces, ...(parsed.surfaces || {}) },
+      colors: normalizeColors(parsed.colors),
+      thresholds: normalizeThresholds(parsed.thresholds)
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -515,10 +588,7 @@ function appendInlineBadge(targetCell, text, ms, placement) {
   }
 
   if (currentConfig.colorCoding) {
-    if (ms < 1800000) badge.classList.add('color-short'); // < 30 min
-    else if (ms < 3600000) badge.classList.add('color-medium'); // 30 - 60 min
-    else if (ms < 7200000) badge.classList.add('color-long'); // 60 - 120 min
-    else badge.classList.add('color-xlong'); // > 120 min
+    badge.classList.add(colorClassFor(ms, currentConfig.thresholds));
   }
 
   badge.setAttribute('aria-label', `Album length: ${text}`);
@@ -531,6 +601,32 @@ function appendInlineBadge(targetCell, text, ms, placement) {
     targetCell.appendChild(badge);
   } else {
     cell.appendChild(badge);
+  }
+}
+
+/**
+ * Picks the palette class for a duration. Boundaries are user-configurable minutes.
+ * @param {number} ms
+ * @param {AlbumLengthConfig['thresholds']} thresholds
+ * @returns {string}
+ */
+function colorClassFor(ms, thresholds) {
+  if (ms < thresholds.short * 60000) return 'color-short';
+  if (ms < thresholds.medium * 60000) return 'color-medium';
+  if (ms < thresholds.long * 60000) return 'color-long';
+  return 'color-xlong';
+}
+
+/**
+ * Pushes the configured palette onto `:root` as CSS custom properties. The stylesheet
+ * injected at startup is never re-run, so this is how color edits take effect live —
+ * updating the variables repaints existing badges without re-rendering any rows.
+ * @param {AlbumLengthConfig} config
+ */
+function applyColorVars(config) {
+  const root = document.documentElement;
+  for (const tier of COLOR_TIERS) {
+    root.style.setProperty(`--al-color-${tier}`, config.colors[tier]);
   }
 }
 
@@ -691,18 +787,20 @@ function injectStyles() {
       display: none;
     }
     /* Graduated palette — distinct hues so each tier reads differently and none
-       collide with the default subtext gray. */
+       collide with the default subtext gray. The hex values are user-configurable;
+       applyColorVars() writes them to :root, and the literals below are the
+       fallbacks used before that runs. */
     .${BADGE_CLASS}.color-short {
-      color: #1ed760; /* < 30 min — green */
+      color: var(--al-color-short, #1ed760); /* shortest tier — green */
     }
     .${BADGE_CLASS}.color-medium {
-      color: #ffd24c; /* 30 - 60 min — yellow */
+      color: var(--al-color-medium, #ffd24c); /* yellow */
     }
     .${BADGE_CLASS}.color-long {
-      color: #ff8a3d; /* 60 - 120 min — orange */
+      color: var(--al-color-long, #ff8a3d); /* orange */
     }
     .${BADGE_CLASS}.color-xlong {
-      color: #ff5c5c; /* > 120 min — red */
+      color: var(--al-color-xlong, #ff5c5c); /* longest tier — red */
       font-weight: 600;
     }
     .al-tooltip {
@@ -739,6 +837,28 @@ function injectStyles() {
       border: 1px solid var(--spice-button-disabled, #555);
     }
     .al-settings .al-disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Palette editor: one row per tier — boundary input, swatch, hex field. */
+    .al-settings [data-section="colors"][hidden] { display: none; }
+    .al-settings .al-color-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+    .al-settings .al-color-label { flex: 1; display: flex; align-items: center; gap: 6px; cursor: default; padding: 0; }
+    .al-settings .al-color-label input[type="number"] { width: 62px; }
+    .al-settings input[type="number"], .al-settings input[type="text"] {
+      background: var(--spice-card, #282828);
+      color: var(--spice-text, #fff);
+      border: 1px solid var(--spice-button-disabled, #555);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 13px;
+    }
+    .al-settings input[type="text"] { width: 86px; font-family: monospace; }
+    .al-settings input[type="color"] {
+      width: 28px; height: 24px; padding: 0; cursor: pointer;
+      background: none;
+      border: 1px solid var(--spice-button-disabled, #555);
+      border-radius: 4px;
+    }
+    .al-settings input.al-invalid { border-color: #ff5c5c; }
   `;
   document.head.appendChild(style);
 }
@@ -786,12 +906,72 @@ function showSettingsModal() {
       <label><input type="checkbox" name="al-color-coding" ${config.colorCoding ? 'checked' : ''}> Color-code badges by length</label>
     </div>
 
+    <div class="al-row" data-section="colors">
+      <h3>Badge Colors</h3>
+      <div class="al-color-row">
+        <span class="al-color-label">Under <input type="number" name="al-threshold-short" min="1" max="100000" value="${config.thresholds.short}"> min</span>
+        <input type="color" name="al-color-short" value="${config.colors.short}">
+        <input type="text" name="al-hex-short" value="${config.colors.short}" maxlength="7" spellcheck="false" aria-label="Short tier hex color">
+      </div>
+      <div class="al-color-row">
+        <span class="al-color-label"><span data-bound="short">${config.thresholds.short}</span> &ndash; <input type="number" name="al-threshold-medium" min="1" max="100000" value="${config.thresholds.medium}"> min</span>
+        <input type="color" name="al-color-medium" value="${config.colors.medium}">
+        <input type="text" name="al-hex-medium" value="${config.colors.medium}" maxlength="7" spellcheck="false" aria-label="Medium tier hex color">
+      </div>
+      <div class="al-color-row">
+        <span class="al-color-label"><span data-bound="medium">${config.thresholds.medium}</span> &ndash; <input type="number" name="al-threshold-long" min="1" max="100000" value="${config.thresholds.long}"> min</span>
+        <input type="color" name="al-color-long" value="${config.colors.long}">
+        <input type="text" name="al-hex-long" value="${config.colors.long}" maxlength="7" spellcheck="false" aria-label="Long tier hex color">
+      </div>
+      <div class="al-color-row">
+        <span class="al-color-label">Over <span data-bound="long">${config.thresholds.long}</span> min</span>
+        <input type="color" name="al-color-xlong" value="${config.colors.xlong}">
+        <input type="text" name="al-hex-xlong" value="${config.colors.xlong}" maxlength="7" spellcheck="false" aria-label="Extra long tier hex color">
+      </div>
+      <div class="al-actions">
+        <button type="button" class="al-btn secondary" data-action="reset-colors">Reset colors &amp; thresholds</button>
+      </div>
+    </div>
+
     <div class="al-actions">
       <button type="button" class="al-btn secondary" data-action="clear-cache">Clear cached album lengths</button>
     </div>
   `;
 
+  const colorSection = container.querySelector('[data-section="colors"]');
+  const swatchFor = (tier) => container.querySelector(`input[name="al-color-${tier}"]`);
+  const hexFieldFor = (tier) => container.querySelector(`input[name="al-hex-${tier}"]`);
+  const thresholdFieldFor = (tier) => container.querySelector(`input[name="al-threshold-${tier}"]`);
+
+  /** Everything except `colors` — a change here means badges must be re-rendered. */
+  const structuralKey = (cfg) => JSON.stringify({ ...cfg, colors: undefined });
+
+  /** Reflects normalized values back into the controls and shows/hides the section. */
+  const syncColorSection = (cfg) => {
+    for (const tier of THRESHOLD_TIERS) {
+      thresholdFieldFor(tier).value = String(cfg.thresholds[tier]);
+      const bound = colorSection.querySelector(`[data-bound="${tier}"]`);
+      if (bound) bound.textContent = String(cfg.thresholds[tier]);
+    }
+    // Color coding never applies in tooltip mode (tooltips don't receive a duration),
+    // so hide the palette rather than offer settings that do nothing.
+    colorSection.hidden = !cfg.colorCoding || cfg.displayMode === 'tooltip';
+  };
+
   const applyChange = () => {
+    const previous = currentConfig;
+    const thresholds = normalizeThresholds({
+      short: thresholdFieldFor('short').value,
+      medium: thresholdFieldFor('medium').value,
+      long: thresholdFieldFor('long').value
+    });
+    const colors = {};
+    for (const tier of COLOR_TIERS) {
+      // The swatch is always a valid color; the hex field is only mirrored into it
+      // once it parses, so reading the swatch keeps half-typed input from applying.
+      colors[tier] = normalizeHex(swatchFor(tier).value, previous.colors[tier]);
+    }
+
     const updated = {
       displayMode: container.querySelector('input[name="al-mode"]:checked')?.value || 'inline',
       placement: container.querySelector('input[name="al-placement"]:checked')?.value || 'album',
@@ -802,17 +982,68 @@ function showSettingsModal() {
         queue: container.querySelector('input[name="al-surface-queue"]').checked
       },
       hideSingles: container.querySelector('input[name="al-hide-singles"]').checked,
-      colorCoding: container.querySelector('input[name="al-color-coding"]').checked
+      colorCoding: container.querySelector('input[name="al-color-coding"]').checked,
+      colors,
+      thresholds
     };
+
+    const needsRerender = structuralKey(updated) !== structuralKey(previous);
     currentConfig = updated;
     saveConfig(updated);
-    clearAllBadges();
-    scheduleInject();
+    applyColorVars(updated);
+    syncColorSection(updated);
+
+    // Dragging the OS color picker fires `input` continuously; re-injecting every
+    // frame would thrash the track list, and the CSS variables already repainted
+    // the existing badges. Only rebuild when something else actually changed.
+    if (needsRerender) {
+      clearAllBadges();
+      scheduleInject();
+    }
   };
 
-  container.querySelectorAll('input').forEach((input) => {
+  for (const tier of COLOR_TIERS) {
+    const swatch = swatchFor(tier);
+    const hexField = hexFieldFor(tier);
+
+    swatch.addEventListener('input', () => {
+      hexField.value = swatch.value;
+      hexField.classList.remove('al-invalid');
+      applyChange();
+    });
+
+    hexField.addEventListener('input', () => {
+      const parsed = normalizeHex(hexField.value, null);
+      // Don't rewrite the field while it's being typed into — only flag it.
+      hexField.classList.toggle('al-invalid', parsed === null);
+      if (parsed === null) return;
+      swatch.value = parsed;
+      applyChange();
+    });
+
+    hexField.addEventListener('blur', () => {
+      hexField.value = swatch.value;
+      hexField.classList.remove('al-invalid');
+    });
+  }
+
+  container.querySelectorAll('input[type="radio"], input[type="checkbox"], input[type="number"]').forEach((input) => {
     input.addEventListener('change', applyChange);
   });
+
+  container.querySelector('[data-action="reset-colors"]').addEventListener('click', () => {
+    for (const tier of COLOR_TIERS) {
+      swatchFor(tier).value = DEFAULT_CONFIG.colors[tier];
+      hexFieldFor(tier).value = DEFAULT_CONFIG.colors[tier];
+      hexFieldFor(tier).classList.remove('al-invalid');
+    }
+    for (const tier of THRESHOLD_TIERS) {
+      thresholdFieldFor(tier).value = String(DEFAULT_CONFIG.thresholds[tier]);
+    }
+    applyChange();
+  });
+
+  syncColorSection(config);
 
   container.querySelector('[data-action="clear-cache"]').addEventListener('click', () => {
     clearCache();
@@ -852,6 +1083,7 @@ function registerMenuItem() {
   currentConfig = loadConfig();
   loadCache();
   injectStyles();
+  applyColorVars(currentConfig);
   registerMenuItem();
   setupObserver();
   scheduleInject();
