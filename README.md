@@ -14,6 +14,7 @@ If you keep playlists made of tracks pulled from different albums and EPs, Spoti
 - Works in **Playlists**, **Liked Songs**, and the **Queue** — toggle each surface independently.
 - Format options: `42m` / `1h 23m`, `42:13`, `1 hour 23 minutes`, or auto-hybrid.
 - Tooltip mode if you'd rather see the length on hover.
+- Optional color-coding by album length, with customizable colors and tier boundaries.
 - Singles auto-hidden — when a track *is* the album, the redundant badge is suppressed.
 - Album durations are cached indefinitely (album lengths don't change). Cache lives in `Spicetify.LocalStorage`.
 - Settings live in the **profile menu** (top-right avatar dropdown → "Album Length").
@@ -51,7 +52,17 @@ Open the Spotify profile dropdown (top-right) → **Album Length**.
 | Format | `Short` (`1h 23m`), `Colon` (`1:23:00`), `Long` (`1 hour 23 minutes`), `Auto` |
 | Show on | Playlists / Liked Songs / Queue — toggle each |
 | Hide singles | Suppresses the badge for 1-track "albums" (default on) |
+| Color-code badges | Tints each badge by album length (off by default) |
+| Badge colors | Per-tier color (swatch or `#rrggbb`) and the minute boundary between tiers |
 | Clear cache | Forces a refetch of all album durations |
+
+### Badge colors
+
+With color-coding enabled, badges are tinted across four length tiers — by default green
+under 30 min, yellow to 60 min, orange to 120 min, red beyond. Each tier's color and the
+boundary between tiers are editable: pick from the swatch or type a hex value (`#rrggbb`
+or `#rgb` shorthand). Boundaries are kept in ascending order automatically, and **Reset
+colors & thresholds** restores the defaults.
 
 ## How it works
 
