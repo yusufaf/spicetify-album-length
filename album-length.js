@@ -49,6 +49,17 @@ const BADGE_DATA_ATTR = 'data-al-album';
 const TOOLTIP_ID = 'al-tooltip';
 const STYLE_ID = 'al-styles';
 
+/** GitHub mark icon SVG path (16x16 viewBox, Bootstrap Icons github, MIT) */
+const GITHUB_SVG_PATH = 'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z';
+
+/** Extension version, shown in the settings modal footer. Kept in sync with the VERSION banner by release-please. */
+// x-release-please-start-version
+const AL_VERSION = '1.0.3';
+// x-release-please-end-version
+
+/** GitHub repo slug, used to build the "report an issue" link in the settings modal footer */
+const AL_GITHUB_REPO = 'yusufaf/spicetify-album-length';
+
 /**
  * Tracklist row selector. Spotify's track rows are `.main-trackList-trackListRow`
  * (the inner grid container). The header row uses `.main-trackList-trackListHeaderRow`,
@@ -859,6 +870,50 @@ function injectStyles() {
       border-radius: 4px;
     }
     .al-settings input.al-invalid { border-color: #ff5c5c; }
+
+    /* Spicetify's isLarge PopupModal stretches its dialog to fill the whole
+       viewport regardless of content length; scope the cap to just our modal
+       (:has) so other isLarge modals in Spotify/other extensions are untouched. */
+    .main-embedWidgetGenerator-container:has(.al-settings) {
+      height: auto !important;
+      max-height: min(80vh, 720px) !important;
+    }
+    .main-trackCreditsModal-mainSection:has(.al-settings) {
+      overflow-y: auto !important;
+    }
+
+    .al-settings-footer {
+      position: sticky;
+      bottom: 0;
+      margin-top: 4px;
+      padding: 10px 0 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      background: var(--background-elevated-base, var(--spice-card, #282828));
+    }
+
+    .al-settings-version {
+      color: var(--spice-subtext, #b3b3b3);
+      font-size: 0.75rem;
+    }
+
+    .al-settings-github-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--spice-subtext, #b3b3b3);
+    }
+
+    .al-settings-github-link:hover {
+      color: var(--spice-text, #fff);
+    }
+
+    .al-settings-github-icon {
+      width: 16px;
+      height: 16px;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -935,6 +990,13 @@ function showSettingsModal() {
 
     <div class="al-actions">
       <button type="button" class="al-btn secondary" data-action="clear-cache">Clear cached album lengths</button>
+    </div>
+
+    <div class="al-settings-footer">
+      <span class="al-settings-version">v${AL_VERSION}</span>
+      <a class="al-settings-github-link" href="https://github.com/${AL_GITHUB_REPO}/issues/new" target="_blank" rel="noopener noreferrer" title="Report an issue on GitHub">
+        <svg viewBox="0 0 16 16" class="al-settings-github-icon"><path d="${GITHUB_SVG_PATH}"/></svg>
+      </a>
     </div>
   `;
 
