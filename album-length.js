@@ -779,8 +779,11 @@ function injectStyles() {
       margin-top: 2px;
     }
     /* Make the duration cell stack the song length and album length vertically,
-       right-aligned to match Spotify's right-aligned duration column. */
-    .main-trackList-duration.al-has-badge {
+       right-aligned to match Spotify's right-aligned duration column. Scoped by
+       our own class only: Spotify renames the cell (.main-trackList-duration →
+       .main-trackList-rowDuration) and styles it display:flex row, so a
+       Spotify-class-qualified selector silently stops matching. */
+    .al-has-badge {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
@@ -788,10 +791,10 @@ function injectStyles() {
     /*
      * On hover/focus Spotify reveals the add-to-playlist (check) and more (...)
      * buttons inside the duration column. The add button is pinned to the left
-     * of the duration, so our inline badge — which widens the duration cell
-     * leftward — gets overlapped by it. Hide the badge while the row is hovered
-     * or focused so those buttons reclaim their native space; the album length
-     * reappears once the row is no longer interacted with.
+     * of the duration, and the cell is a fixed 5ch wide, so our badge overflows
+     * leftward underneath it. Hide the badge while the row is hovered or focused
+     * so those buttons reclaim their native space; the album length reappears
+     * once the row is no longer interacted with.
      */
     .main-trackList-trackListRow:hover .${BADGE_CLASS}.al-placement-duration,
     .main-trackList-trackListRow:focus-within .${BADGE_CLASS}.al-placement-duration {
