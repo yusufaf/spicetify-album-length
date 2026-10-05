@@ -1,5 +1,9 @@
 # Album Length
 
+<!-- site:skip-start -->
+**Documentation:** https://spicetify.yusufaf.dev/album-length/
+<!-- site:skip-end -->
+
 A [Spicetify](https://spicetify.app/) extension that surfaces the length of each track's source album / EP inline in playlists, Liked Songs, and the Queue — so you can see at a glance how long the whole project is without clicking into the album.
 
 ![Inline album length badges in a playlist](album-inline.png)
