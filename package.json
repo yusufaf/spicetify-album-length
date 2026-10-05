@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.24.0",
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
