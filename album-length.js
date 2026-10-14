@@ -60,6 +60,10 @@ const AL_VERSION = '1.0.3';
 /** GitHub repo slug, used to build the "report an issue" link in the settings modal footer */
 const AL_GITHUB_REPO = 'yusufaf/spicetify-album-length';
 
+/** Docs page for this extension and the hub listing the others, linked from the settings modal footer */
+const AL_DOCS_URL = 'https://spicetify.yusufaf.dev/album-length/';
+const AL_HUB_URL = 'https://spicetify.yusufaf.dev/';
+
 /**
  * Tracklist row selector. Spotify's track rows are `.main-trackList-trackListRow`
  * (the inner grid container). The header row uses `.main-trackList-trackListHeaderRow`,
@@ -902,6 +906,23 @@ function injectStyles() {
       font-size: 0.75rem;
     }
 
+    .al-settings-footer-links {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .al-settings-footer .al-settings-footer-link {
+      color: var(--spice-subtext, #b3b3b3);
+      font-size: 0.75rem;
+      text-decoration: none;
+    }
+
+    .al-settings-footer .al-settings-footer-link:hover {
+      color: var(--spice-text, #fff);
+      text-decoration: underline;
+    }
+
     .al-settings-github-link {
       display: inline-flex;
       align-items: center;
@@ -997,9 +1018,13 @@ function showSettingsModal() {
 
     <div class="al-settings-footer">
       <span class="al-settings-version">v${AL_VERSION}</span>
-      <a class="al-settings-github-link" href="https://github.com/${AL_GITHUB_REPO}/issues/new" target="_blank" rel="noopener noreferrer" title="Report an issue on GitHub">
-        <svg viewBox="0 0 16 16" class="al-settings-github-icon"><path d="${GITHUB_SVG_PATH}"/></svg>
-      </a>
+      <div class="al-settings-footer-links">
+        <a class="al-settings-footer-link" href="${AL_DOCS_URL}" target="_blank" rel="noopener noreferrer" title="Album Length documentation">Docs</a>
+        <a class="al-settings-footer-link" href="${AL_HUB_URL}" target="_blank" rel="noopener noreferrer" title="More Spicetify extensions by yusufaf">More extensions</a>
+        <a class="al-settings-github-link" href="https://github.com/${AL_GITHUB_REPO}/issues/new" target="_blank" rel="noopener noreferrer" title="Report an issue on GitHub">
+          <svg viewBox="0 0 16 16" class="al-settings-github-icon"><path d="${GITHUB_SVG_PATH}"/></svg>
+        </a>
+      </div>
     </div>
   `;
 
