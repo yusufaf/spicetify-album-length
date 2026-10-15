@@ -60,9 +60,8 @@ const AL_VERSION = '1.0.3';
 /** GitHub repo slug, used to build the "report an issue" link in the settings modal footer */
 const AL_GITHUB_REPO = 'yusufaf/spicetify-album-length';
 
-/** Docs page for this extension and the hub listing the others, linked from the settings modal footer */
-const AL_DOCS_URL = 'https://spicetify.yusufaf.dev/album-length/';
 const AL_HUB_URL = 'https://spicetify.yusufaf.dev/';
+const AL_DOCS_URL = `${AL_HUB_URL}album-length/`;
 
 /**
  * Tracklist row selector. Spotify's track rows are `.main-trackList-trackListRow`
@@ -898,7 +897,8 @@ function injectStyles() {
       align-items: center;
       justify-content: space-between;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
-      background: var(--background-elevated-base, var(--spice-card, #282828));
+      /* Matches Spicetify's popup container, so the sticky footer blends in under any theme */
+      background: var(--spice-player, var(--background-elevated-base, #121212));
     }
 
     .al-settings-version {
@@ -910,33 +910,33 @@ function injectStyles() {
       display: inline-flex;
       align-items: center;
       gap: 12px;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
-    .al-settings-footer .al-settings-footer-link {
+    .al-settings-footer a[href] {
+      display: inline-flex;
+      align-items: center;
       color: var(--spice-subtext, #b3b3b3);
       font-size: 0.75rem;
       text-decoration: none;
     }
 
-    .al-settings-footer .al-settings-footer-link:hover {
+    .al-settings-footer a[href]:hover {
       color: var(--spice-text, #fff);
       text-decoration: underline;
     }
 
-    .al-settings-github-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--spice-subtext, #b3b3b3);
-    }
-
-    .al-settings-github-link:hover {
-      color: var(--spice-text, #fff);
+    .al-settings-footer a[href]:focus-visible {
+      outline: 2px solid var(--spice-text, #fff);
+      outline-offset: 2px;
+      border-radius: 2px;
     }
 
     .al-settings-github-icon {
       width: 16px;
       height: 16px;
+      fill: currentColor;
     }
   `;
   document.head.appendChild(style);
@@ -1019,10 +1019,10 @@ function showSettingsModal() {
     <div class="al-settings-footer">
       <span class="al-settings-version">v${AL_VERSION}</span>
       <div class="al-settings-footer-links">
-        <a class="al-settings-footer-link" href="${AL_DOCS_URL}" target="_blank" rel="noopener noreferrer" title="Album Length documentation">Docs</a>
-        <a class="al-settings-footer-link" href="${AL_HUB_URL}" target="_blank" rel="noopener noreferrer" title="More Spicetify extensions by yusufaf">More extensions</a>
-        <a class="al-settings-github-link" href="https://github.com/${AL_GITHUB_REPO}/issues/new" target="_blank" rel="noopener noreferrer" title="Report an issue on GitHub">
-          <svg viewBox="0 0 16 16" class="al-settings-github-icon"><path d="${GITHUB_SVG_PATH}"/></svg>
+        <a href="${AL_DOCS_URL}" target="_blank" rel="noopener noreferrer" title="Album Length documentation">Docs</a>
+        <a href="${AL_HUB_URL}" target="_blank" rel="noopener noreferrer" title="More Spicetify extensions by yusufaf">More extensions</a>
+        <a class="al-settings-github-link" href="https://github.com/${AL_GITHUB_REPO}/issues/new" target="_blank" rel="noopener noreferrer" title="Report an issue on GitHub" aria-label="Report an issue on GitHub">
+          <svg viewBox="0 0 16 16" class="al-settings-github-icon" aria-hidden="true"><path d="${GITHUB_SVG_PATH}"/></svg>
         </a>
       </div>
     </div>
