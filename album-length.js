@@ -64,12 +64,16 @@ const AL_HUB_URL = 'https://spicetify.yusufaf.dev/';
 const AL_DOCS_URL = `${AL_HUB_URL}album-length/`;
 
 /**
- * Tracklist row selector. Spotify's track rows are `.main-trackList-trackListRow`
- * (the inner grid container). The header row uses `.main-trackList-trackListHeaderRow`,
- * so this class is unique to actual track rows. Older builds used
- * `[data-testid="tracklist-row"]` but that attribute was removed.
+ * Tracklist row selector. From Spotify 1.3.3 Spicetify no longer maps the
+ * `.main-trackList-*` classes, so rows are found by ARIA structure first and the
+ * readable class is kept for older builds. The structural part matches the
+ * `role=presentation` child of `[role=row]` because that is the element the class
+ * sat on; matching the row itself would nest the two alternatives and break the
+ * ownership check in `extractAlbumFromRow`. The header row has no presentation
+ * child. `#main-view` keeps out the Your Library sidebar, which is also a grid.
  */
-const SEL_TRACKLIST_ROW = '.main-trackList-trackListRow';
+const SEL_TRACKLIST_ROW =
+  '.main-trackList-trackListRow, #main-view [role="grid"] [role="row"][aria-rowindex] > [role="presentation"]';
 /** Anchor inside a row that links to the album the track belongs to. */
 const SEL_ALBUM_LINK = 'a[href^="/album/"]';
 
@@ -459,14 +463,17 @@ function surfaceEnabled() {
  * badge behind the image where it can't be seen.
  *
  * @param {HTMLElement} row
- * @returns {{albumId: string, albumLink: HTMLAnchorElement}|null}
+ * @returns {{albumId: string, albumLink: HTMLAnchorElement, durationCell: Element|null}|null}
  */
 function extractAlbumFromRow(row) {
   const anchors = row.querySelectorAll(SEL_ALBUM_LINK);
   if (anchors.length === 0) return null;
 
-  // The duration cell is usually the last cell, we can find it by class or testid
-  const durationCell = row.querySelector('.main-trackList-duration') || row.querySelector('.main-trackList-rowDuration') || row.querySelector('[data-testid="tracklist-duration"]');
+  // The duration column is the row's last gridcell, and the time is its one
+  // non-button child. Readable class/testid first, for builds that still map them.
+  const gridcells = row.querySelectorAll(':scope > [role="gridcell"]');
+  const durationCell = row.querySelector('.main-trackList-duration') || row.querySelector('.main-trackList-rowDuration') || row.querySelector('[data-testid="tracklist-duration"]')
+    || gridcells[gridcells.length - 1]?.querySelector(':scope > :not(button)') || null;
 
   for (const a of anchors) {
     if (!a.textContent.trim()) continue;
@@ -686,7 +693,7 @@ function injectAll() {
     clearAllBadges();
     return;
   }
-  // Spotify renders sibling ".main-trackList-trackListRow" elements per visual
+  // Spotify renders sibling track-row elements per visual
   // track (e.g. a content row plus an interaction-overlay row) at the same —
   // or near-identical, sub-pixel-off — vertical position. Sort by `.top` and
   // skip any row that lands within a small pixel threshold of the previous
@@ -799,8 +806,8 @@ function injectStyles() {
      * so those buttons reclaim their native space; the album length reappears
      * once the row is no longer interacted with.
      */
-    .main-trackList-trackListRow:hover .${BADGE_CLASS}.al-placement-duration,
-    .main-trackList-trackListRow:focus-within .${BADGE_CLASS}.al-placement-duration {
+    :is(${SEL_TRACKLIST_ROW}):hover .${BADGE_CLASS}.al-placement-duration,
+    :is(${SEL_TRACKLIST_ROW}):focus-within .${BADGE_CLASS}.al-placement-duration {
       display: none;
     }
     /* Graduated palette — distinct hues so each tier reads differently and none
