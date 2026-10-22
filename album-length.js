@@ -463,7 +463,7 @@ function surfaceEnabled() {
  * badge behind the image where it can't be seen.
  *
  * @param {HTMLElement} row
- * @returns {{albumId: string, albumLink: HTMLAnchorElement}|null}
+ * @returns {{albumId: string, albumLink: HTMLAnchorElement, durationCell: Element|null}|null}
  */
 function extractAlbumFromRow(row) {
   const anchors = row.querySelectorAll(SEL_ALBUM_LINK);
@@ -471,8 +471,9 @@ function extractAlbumFromRow(row) {
 
   // The duration column is the row's last gridcell, and the time is its one
   // non-button child. Readable class/testid first, for builds that still map them.
+  const gridcells = row.querySelectorAll(':scope > [role="gridcell"]');
   const durationCell = row.querySelector('.main-trackList-duration') || row.querySelector('.main-trackList-rowDuration') || row.querySelector('[data-testid="tracklist-duration"]')
-    || row.querySelector(':scope > [role="gridcell"]:last-child > :not(button)');
+    || gridcells[gridcells.length - 1]?.querySelector(':scope > :not(button)') || null;
 
   for (const a of anchors) {
     if (!a.textContent.trim()) continue;
