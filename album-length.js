@@ -1185,13 +1185,12 @@ function registerMenuItem() {
   setupObserver();
   scheduleInject();
 
-  // Read by spicetify-compat's `check`. `rows` also covers tooltip mode, which adds no badge.
+  // Read by spicetify-compat's `check`. Tooltip mode adds no badge, so it counts annotated rows instead.
   (window.__spicetifyHealth ??= {})['album-length'] = () => ({
     ready: true,
-    anchors: {
-      badges: document.querySelectorAll(`.${BADGE_CLASS}`).length,
-      rows: document.querySelectorAll(`[${BADGE_DATA_ATTR}]`).length
-    },
+    anchors: currentConfig.displayMode === 'tooltip'
+      ? { rows: document.querySelectorAll(`[${BADGE_DATA_ATTR}]`).length }
+      : { badges: document.querySelectorAll(`.${BADGE_CLASS}`).length },
     errors: []
   });
 
