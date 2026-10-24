@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/yusufaf/spicetify-album-length/compare/v1.0.3...v1.1.0) (2026-10-24)
+
+
+### Features
+
+* add version and GitHub issue link to settings modal footer ([667721e](https://github.com/yusufaf/spicetify-album-length/commit/667721e4806944659d51da90838b8667efb01caf))
+* customizable badge colors and length thresholds ([#4](https://github.com/yusufaf/spicetify-album-length/issues/4)) ([356b306](https://github.com/yusufaf/spicetify-album-length/commit/356b306752920144b6a3b9e55fa8b677c1402d58))
+* expose a health check for spicetify-compat ([#11](https://github.com/yusufaf/spicetify-album-length/issues/11)) ([c415336](https://github.com/yusufaf/spicetify-album-length/commit/c41533697632996c6d5200ebf3c43fce93ad3526))
+* link the docs from settings and spell out Marketplace install ([#7](https://github.com/yusufaf/spicetify-album-length/issues/7)) ([f9f2c98](https://github.com/yusufaf/spicetify-album-length/commit/f9f2c98d43c8acb69b088f7eef5fd6df748e037e))
+
+
+### Bug Fixes
+
+* enlarge Album Length settings modal ([219a95c](https://github.com/yusufaf/spicetify-album-length/commit/219a95c5d9b3bcdd2b6e66fe7b933878debbcdf0))
+* find track rows by ARIA structure on Spotify 1.3.3+ ([#10](https://github.com/yusufaf/spicetify-album-length/issues/10)) ([47430f1](https://github.com/yusufaf/spicetify-album-length/commit/47430f1135aa93e7f93b4178d29d57af8c631806)), closes [#8](https://github.com/yusufaf/spicetify-album-length/issues/8)
+* render badges again on Spotify 1.3.3+ ([#12](https://github.com/yusufaf/spicetify-album-length/issues/12)) ([1ba21b3](https://github.com/yusufaf/spicetify-album-length/commit/1ba21b3cbc427f1f672c33c4a0406c263cbd7ab0))
+* stack duration-column badge below song length ([b41d92c](https://github.com/yusufaf/spicetify-album-length/commit/b41d92c37b2f8dd79c4a30ee43ee7904ab1e98db))
+
 ## [1.0.3](https://github.com/yusufaf/spicetify-album-length/compare/v1.0.2...v1.0.3) (2026-06-13)
 
 
