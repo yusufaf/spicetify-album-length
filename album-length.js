@@ -1165,13 +1165,15 @@ function registerMenuItem() {
 //#region Bootstrap
 
 (async function main() {
+  // The main view is waited for only briefly; setupObserver falls back to document.body without it.
+  const mainViewDeadline = Date.now() + 5000;
   while (
     !Spicetify?.Platform?.History ||
     !Spicetify?.CosmosAsync ||
     !Spicetify?.LocalStorage ||
     !Spicetify?.Menu?.Item ||
     !Spicetify?.PopupModal ||
-    !document.querySelector('#main-view, .Root__main-view')
+    (!document.querySelector('#main-view, .Root__main-view') && Date.now() < mainViewDeadline)
   ) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
