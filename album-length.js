@@ -751,7 +751,7 @@ function setupObserver() {
 
   // Observe the entire main view container — Spotify swaps this subtree on
   // navigation between playlist/Liked Songs/queue, and rows are added inside.
-  const target = document.querySelector('.Root__main-view') || document.body;
+  const target = document.querySelector('#main-view') || document.querySelector('.Root__main-view') || document.body;
 
   tracklistObserver = new MutationObserver(() => scheduleInject());
   tracklistObserver.observe(target, { childList: true, subtree: true });
