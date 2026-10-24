@@ -1170,7 +1170,8 @@ function registerMenuItem() {
     !Spicetify?.CosmosAsync ||
     !Spicetify?.LocalStorage ||
     !Spicetify?.Menu?.Item ||
-    !Spicetify?.PopupModal
+    !Spicetify?.PopupModal ||
+    !document.querySelector('#main-view, .Root__main-view')
   ) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
