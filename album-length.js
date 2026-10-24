@@ -1185,6 +1185,16 @@ function registerMenuItem() {
   setupObserver();
   scheduleInject();
 
+  // Read by spicetify-compat's `check`. `rows` also covers tooltip mode, which adds no badge.
+  (window.__spicetifyHealth ??= {})['album-length'] = () => ({
+    ready: true,
+    anchors: {
+      badges: document.querySelectorAll(`.${BADGE_CLASS}`).length,
+      rows: document.querySelectorAll(`[${BADGE_DATA_ATTR}]`).length
+    },
+    errors: []
+  });
+
   console.log('[Album Length] Initialized');
 })();
 
